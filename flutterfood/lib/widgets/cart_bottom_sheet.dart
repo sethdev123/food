@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
+import '../providers/locale_provider.dart';
 import '../screens/checkout_screen.dart';
 
 void showCartBottomSheet(BuildContext context) {
@@ -11,6 +12,7 @@ void showCartBottomSheet(BuildContext context) {
     backgroundColor: Colors.transparent,
     builder: (context) {
       final isDark = Theme.of(context).brightness == Brightness.dark;
+      final localeProvider = Provider.of<LocaleProvider>(context);
       return Container(
         height: MediaQuery.of(context).size.height * 0.75,
         decoration: BoxDecoration(
@@ -42,7 +44,7 @@ void showCartBottomSheet(BuildContext context) {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'My Cart',
+                    localeProvider.translate('my_cart'),
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -68,7 +70,7 @@ void showCartBottomSheet(BuildContext context) {
                           const Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
                           const SizedBox(height: 20),
                           Text(
-                            'Your cart is empty',
+                            localeProvider.translate('cart_empty'),
                             style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey),
                           ),
                         ],
@@ -101,7 +103,7 @@ void showCartBottomSheet(BuildContext context) {
                             ),
                           ),
                           title: Text(
-                            item.foodItem.name,
+                            localeProvider.translate(item.foodItem.name),
                             style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text('\$${item.foodItem.price.toStringAsFixed(2)}'),
@@ -145,7 +147,7 @@ void showCartBottomSheet(BuildContext context) {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text(localeProvider.translate('total'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                             Text(
                               '\$${cartProvider.totalAmount.toStringAsFixed(2)}',
                               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.orangeAccent),
@@ -168,9 +170,9 @@ void showCartBottomSheet(BuildContext context) {
                               backgroundColor: Colors.orangeAccent,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                             ),
-                            child: const Text(
-                              'Checkout',
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            child: Text(
+                              localeProvider.translate('checkout'),
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),

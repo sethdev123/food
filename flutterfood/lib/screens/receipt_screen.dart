@@ -55,7 +55,7 @@ class ReceiptScreen extends StatelessWidget {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('${item.quantity}x ${item.foodItem.name}'),
+                                  Text('${item.quantity}x ${localeProvider.translate(item.foodItem.name)}'),
                                   Text('\$${(item.foodItem.price * item.quantity).toStringAsFixed(2)}'),
                                 ],
                               ),
@@ -100,7 +100,7 @@ class ReceiptScreen extends StatelessWidget {
                         Text(receipt.deliveryAddress),
                         const SizedBox(height: 15),
                         Text(localeProvider.translate('payment_method'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(receipt.paymentMethod),
+                        Text(localeProvider.translate(receipt.paymentMethod)),
                         const SizedBox(height: 15),
                         Text(localeProvider.translate('date'), style: const TextStyle(fontWeight: FontWeight.bold)),
                         Text(DateFormat('MMM dd, yyyy - hh:mm a').format(receipt.date)),

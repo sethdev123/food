@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
@@ -9,19 +10,22 @@ class AdminDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final localeProvider = Provider.of<LocaleProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // Redirect if not admin (though we should handle this at navigation level too)
     if (!authProvider.isAdmin) {
-      return const Scaffold(
-        body: Center(child: Text('Access Denied: Admins Only')),
+      return Scaffold(
+        body: Center(
+          child: Text(localeProvider.translate('access_denied_admin')),
+        ),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Admin Dashboard',
+          localeProvider.translate('admin_dashboard'),
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.orangeAccent,
@@ -34,7 +38,7 @@ class AdminDashboardScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Order Lifecycle Flowchart',
+              localeProvider.translate('order_lifecycle'),
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -52,12 +56,13 @@ class AdminDashboardScreen extends StatelessWidget {
   }
 
   Widget _buildFlowchart(BuildContext context) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     return Column(
       children: [
         _buildFlowStep(
           context,
-          'Order Placed',
-          'Customer has submitted an order.',
+          localeProvider.translate('order_placed'),
+          localeProvider.translate('order_placed_desc'),
           Icons.shopping_bag,
           Colors.blue,
           isFirst: true,
@@ -65,32 +70,32 @@ class AdminDashboardScreen extends StatelessWidget {
         _buildFlowLine(Colors.blue),
         _buildFlowStep(
           context,
-          'Payment Confirmed',
-          'Transaction was successful.',
+          localeProvider.translate('payment_confirmed'),
+          localeProvider.translate('payment_confirmed_desc'),
           Icons.payment,
           Colors.green,
         ),
         _buildFlowLine(Colors.green),
         _buildFlowStep(
           context,
-          'Preparing Food',
-          'Kitchen is working on the order.',
+          localeProvider.translate('preparing_food'),
+          localeProvider.translate('preparing_food_desc'),
           Icons.restaurant,
           Colors.orange,
         ),
         _buildFlowLine(Colors.orange),
         _buildFlowStep(
           context,
-          'Out for Delivery',
-          'Driver has picked up the order.',
+          localeProvider.translate('out_for_delivery'),
+          localeProvider.translate('out_for_delivery_desc'),
           Icons.delivery_dining,
           Colors.purple,
         ),
         _buildFlowLine(Colors.purple),
         _buildFlowStep(
           context,
-          'Delivered',
-          'Customer received the food.',
+          localeProvider.translate('delivered'),
+          localeProvider.translate('delivered_desc'),
           Icons.check_circle,
           Colors.teal,
           isLast: true,
@@ -175,11 +180,12 @@ class AdminDashboardScreen extends StatelessWidget {
   }
 
   Widget _buildQuickStats(BuildContext context) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Quick Stats',
+          localeProvider.translate('quick_stats'),
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -188,9 +194,9 @@ class AdminDashboardScreen extends StatelessWidget {
         const SizedBox(height: 15),
         Row(
           children: [
-            _buildStatCard(context, 'Total Orders', '1,234', Icons.list_alt, Colors.blue),
+            _buildStatCard(context, localeProvider.translate('total_orders'), '1,234', Icons.list_alt, Colors.blue),
             const SizedBox(width: 15),
-            _buildStatCard(context, 'Revenue', '\$12,345', Icons.attach_money, Colors.green),
+            _buildStatCard(context, localeProvider.translate('revenue'), '\$12,345', Icons.attach_money, Colors.green),
           ],
         ),
       ],

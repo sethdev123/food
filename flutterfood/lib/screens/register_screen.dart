@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import 'dashboard_screen.dart';
 import 'login_screen.dart';
 
@@ -46,10 +47,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   }
 
   void _register() async {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please fill all fields'),
+          content: Text(localeProvider.translate('fill_all_fields')),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -60,7 +62,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Passwords do not match'),
+          content: Text(localeProvider.translate('passwords_do_not_match')),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -71,7 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     if (_passwordController.text.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Password must be at least 6 characters'),
+          content: Text(localeProvider.translate('password_min_length')),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -101,6 +103,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final localeProvider = Provider.of<LocaleProvider>(context);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
@@ -133,7 +136,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     ),
                     SizedBox(height: size.height * 0.03),
                     Text(
-                      'Create Account',
+                      localeProvider.translate('create_account'),
                       style: GoogleFonts.poppins(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
@@ -142,7 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Join our foodie community!',
+                      localeProvider.translate('join_community'),
                       style: GoogleFonts.poppins(
                         fontSize: 15,
                         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
@@ -169,7 +172,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             controller: _nameController,
                             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                             decoration: InputDecoration(
-                              labelText: 'Full Name',
+                              labelText: localeProvider.translate('full_name'),
                               labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                               filled: true,
                               fillColor: isDark ? const Color(0xFF3A3A52) : Colors.deepOrange.withValues(alpha: 0.05),
@@ -190,7 +193,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             keyboardType: TextInputType.emailAddress,
                             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                             decoration: InputDecoration(
-                              labelText: 'Email',
+                              labelText: localeProvider.translate('email'),
                               labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                               filled: true,
                               fillColor: isDark ? const Color(0xFF3A3A52) : Colors.deepOrange.withValues(alpha: 0.05),
@@ -211,7 +214,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             obscureText: _obscurePassword,
                             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                             decoration: InputDecoration(
-                              labelText: 'Password',
+                              labelText: localeProvider.translate('password'),
                               labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                               filled: true,
                               fillColor: isDark ? const Color(0xFF3A3A52) : Colors.deepOrange.withValues(alpha: 0.05),
@@ -239,7 +242,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             obscureText: _obscureConfirm,
                             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                             decoration: InputDecoration(
-                              labelText: 'Confirm Password',
+                              labelText: localeProvider.translate('confirm_password'),
                               labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
                               filled: true,
                               fillColor: isDark ? const Color(0xFF3A3A52) : Colors.deepOrange.withValues(alpha: 0.05),
@@ -293,7 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                                       )
                                     : Text(
-                                        'Create Account',
+                                        localeProvider.translate('create_account'),
                                         style: GoogleFonts.poppins(
                                           fontSize: 17,
                                           fontWeight: FontWeight.bold,
@@ -311,7 +314,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Already have an account?',
+                          localeProvider.translate('already_have_account'),
                           style: GoogleFonts.poppins(
                             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
@@ -329,7 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             );
                           },
                           child: Text(
-                            'Log in',
+                            localeProvider.translate('log_in'),
                             style: GoogleFonts.poppins(
                               color: Colors.deepOrange,
                               fontWeight: FontWeight.bold,

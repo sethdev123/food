@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/food_item.dart';
 import '../providers/food_provider.dart';
+import '../providers/locale_provider.dart';
 
 class AddEditFoodScreen extends StatefulWidget {
   final FoodItem? foodItem;
@@ -65,9 +66,12 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final localeProvider = Provider.of<LocaleProvider>(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.foodItem == null ? 'Add Food' : 'Edit Food'),
+        title: Text(widget.foodItem == null
+            ? localeProvider.translate('add_food')
+            : localeProvider.translate('edit_food')),
         elevation: 0,
       ),
       body: Container(
@@ -97,12 +101,15 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
                               : null),
                     ),
                     child: _pickedImage == null && _imageUrlController.text.isEmpty
-                        ? const Column(
+                        ? Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_photo_alternate, size: 48, color: Colors.grey),
-                              SizedBox(height: 8),
-                              Text('Tap to browse image', style: TextStyle(color: Colors.grey)),
+                              const Icon(Icons.add_photo_alternate, size: 48, color: Colors.grey),
+                              const SizedBox(height: 8),
+                              Text(
+                                localeProvider.translate('tap_to_browse_image'),
+                                style: const TextStyle(color: Colors.grey),
+                              ),
                             ],
                           )
                         : null,
@@ -112,17 +119,17 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
               TextButton.icon(
                 onPressed: _pickImage,
                 icon: const Icon(Icons.image, size: 18),
-                label: const Text('Browse from Gallery'),
+                label: Text(localeProvider.translate('browse_gallery')),
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(
-                  labelText: 'Food Name',
+                  labelText: localeProvider.translate('food_name'),
                   prefixIcon: const Icon(Icons.fastfood_outlined),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
-                validator: (value) => value!.isEmpty ? 'Enter name' : null,
+                validator: (value) => value!.isEmpty ? localeProvider.translate('enter_name') : null,
               ),
               const SizedBox(height: 15),
               Row(
@@ -132,12 +139,12 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
                     child: TextFormField(
                       controller: _priceController,
                       decoration: InputDecoration(
-                        labelText: 'Price',
+                        labelText: localeProvider.translate('price'),
                         prefixIcon: const Icon(Icons.attach_money),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                       ),
                       keyboardType: TextInputType.number,
-                      validator: (value) => double.tryParse(value!) == null ? 'Enter valid price' : null,
+                      validator: (value) => double.tryParse(value!) == null ? localeProvider.translate('enter_valid_price') : null,
                     ),
                   ),
                   const SizedBox(width: 15),
@@ -146,11 +153,11 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
                     child: TextFormField(
                       controller: _categoryController,
                       decoration: InputDecoration(
-                        labelText: 'Category',
+                        labelText: localeProvider.translate('category'),
                         prefixIcon: const Icon(Icons.category_outlined),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                       ),
-                      validator: (value) => value!.isEmpty ? 'Enter category' : null,
+                      validator: (value) => value!.isEmpty ? localeProvider.translate('enter_category') : null,
                     ),
                   ),
                 ],
@@ -159,19 +166,19 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
               TextFormField(
                 controller: _descriptionController,
                 decoration: InputDecoration(
-                  labelText: 'Description',
+                  labelText: localeProvider.translate('description'),
                   prefixIcon: const Icon(Icons.description_outlined),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
                 maxLines: 3,
-                validator: (value) => value!.isEmpty ? 'Enter description' : null,
+                validator: (value) => value!.isEmpty ? localeProvider.translate('enter_description') : null,
               ),
               const SizedBox(height: 15),
               TextFormField(
                 controller: _imageUrlController,
                 onChanged: (value) => setState(() {}),
                 decoration: InputDecoration(
-                  labelText: 'Or paste Image URL',
+                  labelText: localeProvider.translate('image_url'),
                   prefixIcon: const Icon(Icons.link),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
@@ -187,7 +194,9 @@ class _AddEditFoodScreenState extends State<AddEditFoodScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
                   child: Text(
-                    widget.foodItem == null ? 'Add Item' : 'Update Item',
+                    widget.foodItem == null
+                        ? localeProvider.translate('add_item')
+                        : localeProvider.translate('update_item'),
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),

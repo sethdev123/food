@@ -1,10 +1,27 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static String _baseUrl = 'http://127.0.0.1:8000/api';
+  static String _baseUrl = _defaultBaseUrl;
   static String get baseUrl => _baseUrl;
+
+  /// Optional compile-time override, for example:
+  /// `flutter build ios --dart-define=API_BASE_URL=http://192.168.1.20:8000/api`
+  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  /// On the web, default to the same host that served the app (the dev
+  /// machine) on the backend port. On mobile/desktop, fall back to localhost
+  /// and let the user change it from the login screen.
+  static String get _defaultBaseUrl {
+    if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
+    if (kIsWeb) {
+      final host = Uri.base.host;
+      if (host.isNotEmpty) return 'http://$host:8000/api';
+    }
+    return 'http://127.0.0.1:8000/api';
+  }
 
   static String? _token;
 
@@ -29,7 +46,7 @@ class ApiService {
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = _normalizeUrl(prefs.getString('server_url') ?? 'http://127.0.0.1:8000/api');
+    _baseUrl = _normalizeUrl(prefs.getString('server_url') ?? _defaultBaseUrl);
     await prefs.setString('server_url', _baseUrl);
   }
 

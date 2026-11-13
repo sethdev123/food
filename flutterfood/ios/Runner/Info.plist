@@ -11,6 +11,12 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to your location to show your current position on the map for delivery.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app connects to the food ordering backend running on your local network.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photos so you can upload food images.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to your camera so you can take food photos.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

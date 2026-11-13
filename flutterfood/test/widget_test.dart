@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import 'package:food/main.dart';
 import 'package:food/providers/auth_provider.dart';
 import 'package:food/providers/food_provider.dart';
+import 'package:food/providers/locale_provider.dart';
+import 'package:food/providers/theme_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MockHttpClient extends Fake implements HttpClient {
   @override
@@ -57,18 +60,24 @@ class MyHttpOverrides extends HttpOverrides {
 }
 
 void main() {
-  HttpOverrides.global = MyHttpOverrides();
+  setUp(() {
+    HttpOverrides.global = MyHttpOverrides();
+  });
 
   testWidgets('Welcome screen smoke test', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => FoodProvider()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ],
         child: const FoodApp(),
       ),
     );
+    await tester.pump();
 
     expect(find.textContaining('Delicious Food'), findsOneWidget);
     expect(find.text('Get Started'), findsOneWidget);

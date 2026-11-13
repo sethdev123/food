@@ -1,15 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
+import '../providers/locale_provider.dart';
 import '../models/order_receipt.dart';
 import '../services/api_service.dart';
+import '../services/location_service.dart';
 import 'receipt_screen.dart';
 import 'welcome_screen.dart';
 
@@ -20,24 +24,356 @@ class CheckoutScreen extends StatefulWidget {
   State<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
-class _CheckoutScreenState extends State<CheckoutScreen> {
-  LatLng _selectedLocation = const LatLng(11.5564, 104.9282); // Phnom Penh
+class _CheckoutScreenState extends State<CheckoutScreen>
+    with SingleTickerProviderStateMixin {
+  static const _lastLatKey = 'checkout_last_lat';
+  static const _lastLngKey = 'checkout_last_lng';
+  static const _lastAddressKey = 'checkout_last_address';
+
+  /// Only used as a camera fallback when no location has ever been resolved.
+  /// It is never used as the delivery location.
+  static const _worldCenter = LatLng(0, 0);
+
   String _selectedPaymentMethod = 'ABA Pay';
-  final _addressController = TextEditingController(text: 'Phnom Penh, Cambodia');
+  final _addressController = TextEditingController();
   final _locationController = TextEditingController();
   final _mapController = MapController();
+  final _locationService = LocationService();
+
+  LatLng? _selectedLocation;
+  LatLng _mapCenter = _worldCenter;
+  bool _mapReady = false;
+  bool _isBootstrapping = true;
+  bool _isResolvingAddress = false;
+
+  late final AnimationController _cameraAnimationController;
+  LatLng? _cameraFrom;
+  LatLng? _cameraTo;
+  double _cameraZoomFrom = 16;
+  double _cameraZoomTo = 16;
+
+  Timer? _addressDebounce;
+  int _addressRequestId = 0;
+
   String? _selectedCouponCode;
   String? _locationError;
   bool _isParsingLocation = false;
+  bool _isLocating = false;
   bool _isProcessing = false;
 
   @override
+  void initState() {
+    super.initState();
+    _cameraAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    )..addListener(_onCameraAnimationTick);
+    _bootstrapLocation();
+  }
+
+  String _tr(String key) =>
+      Provider.of<LocaleProvider>(context, listen: false).translate(key);
+
+  String _trArgs(String key, Map<String, String> args) =>
+      Provider.of<LocaleProvider>(context, listen: false)
+          .translateArgs(key, args);
+
+  @override
   void dispose() {
+    _addressDebounce?.cancel();
+    _cameraAnimationController
+      ..removeListener(_onCameraAnimationTick)
+      ..dispose();
     _addressController.dispose();
     _locationController.dispose();
     _mapController.dispose();
     super.dispose();
   }
+
+  // ---------------------------------------------------------------------------
+  // Location bootstrap, selection and camera animation
+  // ---------------------------------------------------------------------------
+
+  Future<void> _bootstrapLocation() async {
+    final cached = await _loadCachedLocation();
+    final detected = await _tryGetCurrentLocation();
+
+    if (!mounted) return;
+
+    final point = detected != null
+        ? LatLng(detected.latitude, detected.longitude)
+        : cached?.point;
+
+    setState(() {
+      _isBootstrapping = false;
+      _isLocating = false;
+      _mapCenter = point ?? _worldCenter;
+      _selectedLocation = point;
+      if (point == null) {
+        _locationError ??= _tr('could_not_detect_location');
+      } else {
+        _locationError = null;
+        if (detected == null && cached != null) {
+          _addressController.text = cached.address;
+        }
+      }
+    });
+
+    if (detected == null || point == null) {
+      // With no GPS, still try to refresh an empty cached address.
+      if (detected == null && cached != null && cached.address.isEmpty) {
+        unawaited(_resolveAddress(cached.point));
+      }
+      return;
+    }
+
+    if (detected.isApproximate && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_tr('approximate_location')),
+        ),
+      );
+    }
+
+    await _resolveAddress(point);
+  }
+
+  Future<CurrentLocation?> _tryGetCurrentLocation() async {
+    try {
+      return await _locationService.getCurrentLocation();
+    } on LocationException catch (e) {
+      if (mounted) setState(() => _locationError = e.message);
+      return null;
+    } catch (e) {
+      if (mounted) {
+        setState(() => _locationError =
+            _trArgs('could_not_get_location', {'error': '$e'}));
+      }
+      return null;
+    }
+  }
+
+  SnackBarAction? _settingsActionFor(LocationIssue issue) {
+    switch (issue) {
+      case LocationIssue.permissionDeniedForever:
+        return SnackBarAction(
+          label: _tr('action_settings'),
+          onPressed: () => unawaited(_locationService.openAppSettings()),
+        );
+      case LocationIssue.serviceDisabled:
+        return SnackBarAction(
+          label: _tr('action_enable'),
+          onPressed: () => unawaited(_locationService.openLocationSettings()),
+        );
+      case LocationIssue.permissionDenied:
+      case LocationIssue.unavailable:
+        return null;
+    }
+  }
+
+  void _onCameraAnimationTick() {
+    final from = _cameraFrom;
+    final to = _cameraTo;
+    if (from == null || to == null || !_mapReady) return;
+
+    final t = Curves.easeInOutCubic.transform(_cameraAnimationController.value);
+    final center = LatLng(
+      from.latitude + (to.latitude - from.latitude) * t,
+      from.longitude + (to.longitude - from.longitude) * t,
+    );
+    _mapController.move(
+      center,
+      _cameraZoomFrom + (_cameraZoomTo - _cameraZoomFrom) * t,
+    );
+  }
+
+  void _animateCameraTo(LatLng target, {double zoom = 16}) {
+    if (!_mapReady) {
+      setState(() => _mapCenter = target);
+      return;
+    }
+    _cameraFrom = _mapController.camera.center;
+    _cameraTo = target;
+    _cameraZoomFrom = _mapController.camera.zoom;
+    _cameraZoomTo = zoom;
+    _cameraAnimationController.forward(from: 0);
+  }
+
+  void _setSelectedLocation(LatLng point) {
+    setState(() {
+      _selectedLocation = point;
+      _locationError = null;
+    });
+    // Persist the point now; the address is saved once it is resolved.
+    _persistPoint(point);
+  }
+
+  void _onMapTap(TapPosition tapPosition, LatLng point) {
+    _setSelectedLocation(point);
+    _scheduleAddressLookup(point);
+  }
+
+  void _onPinDrag(DragUpdateDetails details) {
+    final current = _selectedLocation;
+    if (current == null || !_mapReady) return;
+
+    final camera = _mapController.camera;
+    final screenPoint = camera.latLngToScreenOffset(current);
+    final next = camera.screenOffsetToLatLng(screenPoint + details.delta);
+
+    // Invalidate any in-flight lookup; the address is refreshed when the drag
+    // ends so we don't spam the geocoder for every pixel moved.
+    _addressRequestId++;
+    setState(() {
+      _selectedLocation = next;
+      _isResolvingAddress = false;
+      _locationError = null;
+    });
+  }
+
+  void _onPinDragEnd() {
+    final point = _selectedLocation;
+    if (point == null) return;
+    _persistPoint(point);
+    _scheduleAddressLookup(point);
+  }
+
+  void _scheduleAddressLookup(LatLng point) {
+    _addressDebounce?.cancel();
+    _addressDebounce = Timer(
+      const Duration(milliseconds: 450),
+      () => _resolveAddress(point),
+    );
+  }
+
+  Future<void> _resolveAddress(LatLng point) async {
+    final requestId = ++_addressRequestId;
+
+    if (mounted) setState(() => _isResolvingAddress = true);
+
+    final address = await _locationService.reverseGeocode(
+      point.latitude,
+      point.longitude,
+    );
+
+    if (!mounted || requestId != _addressRequestId) return;
+
+    final fallback =
+        '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
+    final resolved = address != null && address.isNotEmpty ? address : fallback;
+
+    setState(() {
+      _addressController.text = resolved;
+      _isResolvingAddress = false;
+    });
+
+    await _persistLocation(point, resolved);
+  }
+
+  Future<_CachedLocation?> _loadCachedLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lat = prefs.getDouble(_lastLatKey);
+      final lng = prefs.getDouble(_lastLngKey);
+      if (lat == null || lng == null) return null;
+      return _CachedLocation(
+        point: LatLng(lat, lng),
+        address: prefs.getString(_lastAddressKey) ?? '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _persistPoint(LatLng point) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_lastLatKey, point.latitude);
+      await prefs.setDouble(_lastLngKey, point.longitude);
+      // The previously saved address belongs to the previous point.
+      await prefs.remove(_lastAddressKey);
+    } catch (_) {
+      // Persisting is a convenience only; never block checkout on it.
+    }
+  }
+
+  Future<void> _persistLocation(LatLng point, String address) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_lastLatKey, point.latitude);
+      await prefs.setDouble(_lastLngKey, point.longitude);
+      await prefs.setString(_lastAddressKey, address);
+    } catch (_) {
+      // Persisting is a convenience only; never block checkout on it.
+    }
+  }
+
+  Widget _buildMapPlaceholder(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF23233A) : const Color(0xFFF2EFE9),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(color: Colors.orangeAccent),
+            const SizedBox(height: 12),
+            Text(
+              _tr('detecting_location'),
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapStatusChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.orangeAccent,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryPin() {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Icon(
+        Icons.location_on,
+        color: Colors.red,
+        size: 48,
+        shadows: const [
+          Shadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 4)),
+        ],
+      ),
+    );
+  }
+
 
   /// Extracts coordinates from Google Maps URL patterns.
   LatLng? _extractCoordsFromUrl(String url) {
@@ -145,70 +481,66 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (parsed != null) {
       setState(() {
-        _selectedLocation = parsed!;
         _locationError = null;
         _isParsingLocation = false;
       });
-      _mapController.move(parsed, 16);
+      _setSelectedLocation(parsed);
+      _animateCameraTo(parsed);
+      unawaited(_resolveAddress(parsed));
     } else {
       setState(() {
-        _locationError = 'Could not extract location. Try coordinates like "11.546, 104.853" or a Google Maps link.';
+        _locationError = _tr('could_not_extract_location');
         _isParsingLocation = false;
       });
     }
   }
 
   Future<void> _goToCurrentLocation() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enable location services.')),
-      );
-      return;
-    }
+    if (_isLocating) return;
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission denied.')),
-        );
-        return;
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location permissions are permanently denied. Please enable them in Settings.')),
-      );
-      return;
-    }
+    setState(() {
+      _isLocating = true;
+      _locationError = null;
+    });
 
     try {
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+      final location = await _locationService.getCurrentLocation();
+      if (!mounted) return;
+
+      final loc = LatLng(location.latitude, location.longitude);
+      _setSelectedLocation(loc);
+      _animateCameraTo(loc);
+
+      if (location.isApproximate) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_tr('approximate_location')),
+          ),
+        );
+      }
+
+      unawaited(_resolveAddress(loc));
+    } on LocationException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          action: _settingsActionFor(e.issue),
         ),
       );
-      if (!mounted) return;
-      final loc = LatLng(position.latitude, position.longitude);
-      setState(() => _selectedLocation = loc);
-      _mapController.move(loc, 16);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not get location: $e')),
+        SnackBar(content: Text(_trArgs('could_not_get_location', {'error': '$e'}))),
       );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
     }
   }
 
   String _couponLabel(String code, double rate) {
-    if (rate == 0.0) return '$code — Free Shipping';
-    return '$code — ${(rate * 100).toInt()}% OFF';
+    if (rate == 0.0) return '$code — ${_tr('free_shipping')}';
+    return '$code — ${_trArgs('percent_off', {'percent': '${(rate * 100).toInt()}'})}';
   }
 
   void _onCouponChanged(CartProvider cart, String? value) {
@@ -223,6 +555,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _showQRDialog(BuildContext screenContext, CartProvider cart) {
+    final localeProvider =
+        Provider.of<LocaleProvider>(screenContext, listen: false);
     final discountedTotal = cart.totalAfterDiscount;
 
     showDialog(
@@ -232,7 +566,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         title: Column(
           children: [
             Text(_selectedPaymentMethod, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Text('Scan to Pay', style: TextStyle(fontSize: 14, color: Colors.grey)),
+            Text(
+              localeProvider.translate('scan_to_pay'),
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
           ],
         ),
         content: Column(
@@ -261,7 +598,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(localeProvider.translate('cancel')),
           ),
           ElevatedButton(
             onPressed: () {
@@ -269,7 +606,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               _processOrder(screenContext, cart);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('I Have Paid', style: TextStyle(color: Colors.white)),
+            child: Text(
+              localeProvider.translate('i_have_paid'),
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -277,6 +617,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _processOrder(BuildContext context, CartProvider cart) async {
+    final location = _selectedLocation;
+    if (location == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_tr('set_location_first')),
+        ),
+      );
+      return;
+    }
+
+    final deliveryAddress = _addressController.text.trim().isEmpty
+        ? '${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}'
+        : _addressController.text.trim();
+
     setState(() => _isProcessing = true);
 
     try {
@@ -293,9 +647,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         couponCode: cart.selectedCouponCode.isEmpty ? null : cart.selectedCouponCode,
         totalAmount: totalToPay,
         date: DateTime.now(),
-        deliveryAddress: _addressController.text,
-        latitude: _selectedLocation.latitude,
-        longitude: _selectedLocation.longitude,
+        deliveryAddress: deliveryAddress,
+        latitude: location.latitude,
+        longitude: location.longitude,
         paymentMethod: _selectedPaymentMethod,
       );
 
@@ -305,9 +659,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             'food_item_id': int.tryParse(ci.foodItem.id) ?? 0,
             'quantity': ci.quantity,
           }).toList(),
-          'delivery_address': _addressController.text,
-          'latitude': _selectedLocation.latitude,
-          'longitude': _selectedLocation.longitude,
+          'delivery_address': deliveryAddress,
+          'latitude': location.latitude,
+          'longitude': location.longitude,
           'payment_method': _selectedPaymentMethod,
           'coupon_code': cart.selectedCouponCode.isEmpty ? null : cart.selectedCouponCode,
           'discount_amount': discountAmount,
@@ -321,11 +675,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           setState(() => _isProcessing = false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Session expired. Log out and log in again to place orders.'),
+              content: Text(_tr('session_expired')),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 6),
               action: SnackBarAction(
-                label: 'Logout',
+                label: _tr('logout'),
                 textColor: Colors.white,
                 onPressed: () {
                   Provider.of<AuthProvider>(context, listen: false).logout();
@@ -344,7 +698,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           final statusCode = e is ApiException ? '${e.statusCode}' : 'N/A';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Backend unreachable — order saved locally\nURL: $serverUrl/orders\nStatus: $statusCode\nError: $e'),
+              content: Text(_trArgs('backend_unreachable', {
+                'url': serverUrl,
+                'status': statusCode,
+                'error': '$e',
+              })),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 10),
               behavior: SnackBarBehavior.floating,
@@ -376,7 +734,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Checkout',
+          _tr('checkout'),
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
       ),
@@ -386,11 +744,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.all(15.0),
+            Padding(
+              padding: const EdgeInsets.all(15.0),
               child: Text(
-                'Select Delivery Location',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                _tr('select_delivery_location'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
             Padding(
@@ -398,8 +756,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: TextField(
                 controller: _locationController,
                 decoration: InputDecoration(
-                  labelText: 'Paste Google Maps link or coordinates',
-                  hintText: 'e.g. 11.546, 104.853 or https://maps.app.goo.gl/...',
+                  labelText: _tr('paste_maps_link'),
+                  hintText: _tr('maps_link_hint'),
                   prefixIcon: const Icon(Icons.link, color: Colors.orangeAccent),
                   suffixIcon: _isParsingLocation
                       ? const Padding(
@@ -437,65 +795,125 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             const SizedBox(height: 10),
             SizedBox(
-              height: 250,
-              child: Stack(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 15),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: _selectedLocation,
-                          initialZoom: 13,
-                          onTap: (tapPosition, point) {
-                            setState(() => _selectedLocation = point);
-                          },
-                        ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.example.food',
+              height: MediaQuery.of(context).size.width > 600 ? 400 : 250,
+              child: _isBootstrapping
+                  ? _buildMapPlaceholder(isDark)
+                  : Stack(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 15),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: Colors.grey[300]!),
                           ),
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                point: _selectedLocation,
-                                width: 80,
-                                height: 80,
-                                child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(15),
+                            child: FlutterMap(
+                              mapController: _mapController,
+                              options: MapOptions(
+                                initialCenter: _mapCenter,
+                                initialZoom: _selectedLocation == null ? 2 : 16,
+                                minZoom: 2,
+                                maxZoom: 19,
+                                onMapReady: () {
+                                  if (mounted) setState(() => _mapReady = true);
+                                },
+                                onTap: _onMapTap,
                               ),
-                            ],
+                              children: [
+                                TileLayer(
+                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.example.food',
+                                ),
+                                MarkerLayer(
+                                  markers: [
+                                    if (_selectedLocation != null)
+                                      Marker(
+                                        point: _selectedLocation!,
+                                        width: 64,
+                                        height: 64,
+                                        alignment: Alignment.topCenter,
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () {},
+                                          onPanUpdate: _onPinDrag,
+                                          onPanEnd: (_) => _onPinDragEnd(),
+                                          onPanCancel: _onPinDragEnd,
+                                          child: _buildDeliveryPin(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                        if (_isLocating)
+                          Positioned(
+                            top: 8,
+                            left: 23,
+                            child: _buildMapStatusChip(_tr('finding_location')),
+                          )
+                        else if (_isResolvingAddress)
+                          Positioned(
+                            top: 8,
+                            left: 23,
+                            child: _buildMapStatusChip(_tr('updating_address')),
+                          ),
+                        Positioned(
+                          right: 23,
+                          bottom: 8,
+                          child: FloatingActionButton.small(
+                            heroTag: 'myLocation',
+                            tooltip: _tr('use_my_location'),
+                            onPressed: _isLocating ? null : _goToCurrentLocation,
+                            backgroundColor: Colors.white,
+                            child: _isLocating
+                                ? const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.orangeAccent,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(Icons.my_location, color: Colors.orangeAccent),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Positioned(
-                    right: 23,
-                    bottom: 8,
-                    child: FloatingActionButton.small(
-                      heroTag: 'myLocation',
-                      onPressed: _goToCurrentLocation,
-                      backgroundColor: Colors.white,
-                      child: const Icon(Icons.my_location, color: Colors.orangeAccent),
-                    ),
-                  ),
-                ],
-              ),
             ),
             Padding(
               padding: const EdgeInsets.all(15.0),
               child: TextField(
                 controller: _addressController,
                 decoration: InputDecoration(
-                  labelText: 'Delivery Address',
+                  labelText: _tr('delivery_address_label'),
+                  hintText: _tr('tap_map_or_drag'),
+                  helperText: _selectedLocation == null
+                      ? null
+                      : _trArgs('lat_lng', {
+                          'lat': _selectedLocation!.latitude.toStringAsFixed(6),
+                          'lng': _selectedLocation!.longitude.toStringAsFixed(6),
+                        }),
+                  helperMaxLines: 1,
                   prefixIcon: const Icon(Icons.home_outlined),
+                  suffixIcon: _isResolvingAddress
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.orangeAccent,
+                            ),
+                          ),
+                        )
+                      : null,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
               ),
@@ -505,15 +923,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: DropdownButtonFormField<String?>(
                 value: _selectedCouponCode,
                 decoration: InputDecoration(
-                  labelText: 'Select Coupon',
+                  labelText: _tr('select_coupon'),
                   prefixIcon: const Icon(Icons.card_giftcard, color: Colors.orangeAccent),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
                 isExpanded: true,
                 items: [
-                  const DropdownMenuItem<String?>(
+                  DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('No Coupon'),
+                    child: Text(_tr('no_coupon')),
                   ),
                   ...cart.availableCoupons.entries.map((entry) {
                     return DropdownMenuItem<String?>(
@@ -534,8 +952,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             ),
                             child: Text(
                               entry.value == 0.0
-                                  ? 'Free Ship'
-                                  : '${(entry.value * 100).toInt()}% OFF',
+                                  ? _tr('free_ship')
+                                  : _trArgs('percent_off', {
+                                      'percent':
+                                          '${(entry.value * 100).toInt()}',
+                                    }),
                               style: const TextStyle(
                                 color: Colors.orangeAccent,
                                 fontWeight: FontWeight.bold,
@@ -565,11 +986,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ],
                 ),
               ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15.0),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15.0),
               child: Text(
-                'Payment Method',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                _tr('payment_method_label'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
             ListTile(
@@ -591,7 +1012,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               trailing: const Icon(Icons.qr_code_scanner, color: Colors.blue),
             ),
             ListTile(
-              title: const Text('Cash on Delivery'),
+              title: Text(_tr('cash_on_delivery')),
               leading: Radio<String>(
                 value: 'Cash on Delivery',
                 groupValue: _selectedPaymentMethod,
@@ -607,7 +1028,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Subtotal:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(_tr('subtotal'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       Text(
                         '\$${cart.totalAmount.toStringAsFixed(2)}',
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -619,7 +1040,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Discount (${cart.selectedCouponCode}):', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(_trArgs('discount_with_code', {'code': cart.selectedCouponCode}), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         Text(
                           '-\$${cart.discountAmount.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
@@ -631,7 +1052,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total to Pay:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(_tr('total_to_pay'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       Text(
                         '\$${cart.totalAfterDiscount.toStringAsFixed(2)}',
                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.orangeAccent),
@@ -665,9 +1086,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
-                          : const Text(
-                              'Pay Now',
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          : Text(
+                              _tr('pay_now'),
+                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                     ),
                   ),
@@ -680,4 +1101,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
     );
   }
+}
+
+class _CachedLocation {
+  final LatLng point;
+  final String address;
+
+  const _CachedLocation({required this.point, required this.address});
 }

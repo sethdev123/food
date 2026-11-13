@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
+import '../providers/locale_provider.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
@@ -10,13 +11,14 @@ class CartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    final localeProvider = Provider.of<LocaleProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final items = cart.items.values.toList();
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'My Cart',
+          localeProvider.translate('my_cart'),
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
       ),
@@ -30,7 +32,7 @@ class CartScreen extends StatelessWidget {
                   const Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
                   const SizedBox(height: 20),
                   Text(
-                    'Your cart is empty',
+                    localeProvider.translate('cart_empty'),
                     style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey),
                   ),
                 ],
@@ -59,7 +61,7 @@ class CartScreen extends StatelessWidget {
                             ),
                           ),
                           title: Text(
-                            item.foodItem.name,
+                            localeProvider.translate(item.foodItem.name),
                             style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text('\$${item.foodItem.price.toStringAsFixed(2)}'),
@@ -103,7 +105,7 @@ class CartScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(localeProvider.translate('total'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           Text(
                             '\$${cart.totalAmount.toStringAsFixed(2)}',
                             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.orangeAccent),
@@ -125,9 +127,9 @@ class CartScreen extends StatelessWidget {
                             backgroundColor: Colors.orangeAccent,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           ),
-                          child: const Text(
-                            'Checkout',
-                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                          child: Text(
+                            localeProvider.translate('checkout'),
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),

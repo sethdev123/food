@@ -29,7 +29,7 @@ class SettingsScreen extends StatelessWidget {
               localeProvider.translate('dark_mode'),
               style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
             ),
-            subtitle: const Text('Enable dark theme for the app'),
+            subtitle: Text(localeProvider.translate('enable_dark_mode_desc')),
             value: themeProvider.isDarkMode,
             onChanged: (value) {
               themeProvider.toggleTheme();
@@ -46,7 +46,9 @@ class SettingsScreen extends StatelessWidget {
               localeProvider.translate('language'),
               style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
             ),
-            subtitle: Text(localeProvider.locale.languageCode == 'en' ? 'English' : 'ភាសាខ្មែរ (Khmer)'),
+            subtitle: Text(localeProvider.locale.languageCode == 'en'
+                ? localeProvider.translate('english')
+                : localeProvider.translate('khmer')),
             trailing: DropdownButton<String>(
               value: localeProvider.locale.languageCode,
               underline: const SizedBox(),
@@ -55,9 +57,15 @@ class SettingsScreen extends StatelessWidget {
                   localeProvider.setLocale(Locale(newValue));
                 }
               },
-              items: const [
-                DropdownMenuItem(value: 'en', child: Text('English')),
-                DropdownMenuItem(value: 'km', child: Text('ខ្មែរ')),
+              items: [
+                DropdownMenuItem(
+                  value: 'en',
+                  child: Text(localeProvider.translate('english')),
+                ),
+                DropdownMenuItem(
+                  value: 'km',
+                  child: Text(localeProvider.translate('khmer')),
+                ),
               ],
             ),
           ),

@@ -44,7 +44,7 @@ class WelcomeScreen extends StatelessWidget {
           // Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+              padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width * 0.1),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -53,7 +53,7 @@ class WelcomeScreen extends StatelessWidget {
                     localeProvider.translate('welcome_title'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
-                      fontSize: 40,
+                      fontSize: MediaQuery.of(context).size.width > 600 ? 50 : 40,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -63,13 +63,13 @@ class WelcomeScreen extends StatelessWidget {
                     localeProvider.translate('welcome_subtitle'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
+                      fontSize: MediaQuery.of(context).size.width > 600 ? 20 : 16,
                       color: Colors.white70,
                     ),
                   ),
                   const Spacer(),
                   SizedBox(
-                    width: double.infinity,
+                    width: MediaQuery.of(context).size.width > 600 ? 300 : double.infinity,
                     height: 60,
                     child: ElevatedButton(
                       onPressed: () {
@@ -87,7 +87,7 @@ class WelcomeScreen extends StatelessWidget {
                       child: Text(
                         localeProvider.translate('get_started'),
                         style: GoogleFonts.poppins(
-                          fontSize: 18,
+                          fontSize: MediaQuery.of(context).size.width > 600 ? 20 : 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),

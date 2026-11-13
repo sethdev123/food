@@ -55,23 +55,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   void _showServerUrlDialog() {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final controller = TextEditingController(text: ApiService.baseUrl);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Server URL'),
+        title: Text(localeProvider.translate('server_url')),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Backend API URL',
+          decoration: InputDecoration(
+            labelText: localeProvider.translate('backend_api_url'),
             hintText: 'http://192.168.1.100:8000/api',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(localeProvider.translate('cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -79,11 +80,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Server URL updated')),
+                  SnackBar(
+                    content: Text(localeProvider.translate('server_url_updated')),
+                  ),
                 );
               }
             },
-            child: const Text('Save'),
+            child: Text(localeProvider.translate('save')),
           ),
         ],
       ),
@@ -119,7 +122,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     } else {
       if (mounted) {
         final auth = Provider.of<AuthProvider>(context, listen: false);
-        final msg = auth.lastError ?? Provider.of<LocaleProvider>(context, listen: false).translate('invalid_credentials');
+        final locale = Provider.of<LocaleProvider>(context, listen: false);
+        final rawError = auth.lastError;
+        final String msg;
+        if (rawError == null) {
+          msg = locale.translate('invalid_credentials');
+        } else if (rawError == 'Invalid credentials') {
+          msg = locale.translate('invalid_credentials_short');
+        } else if (rawError.startsWith('Connection failed')) {
+          msg = locale.translate('connection_failed');
+        } else {
+          msg = rawError;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),

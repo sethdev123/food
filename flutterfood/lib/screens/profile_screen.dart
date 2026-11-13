@@ -34,6 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   void _saveProfile() async {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final user = Provider.of<AuthProvider>(context, listen: false).user;
     await Provider.of<AuthProvider>(context, listen: false).updateProfile(
       name: _nameController.text,
@@ -45,7 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!')),
+        SnackBar(content: Text(localeProvider.translate('profile_updated'))),
       );
     }
   }
@@ -64,9 +65,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       }
     } catch (e) {
       if (mounted) {
+        final localeProvider =
+            Provider.of<LocaleProvider>(context, listen: false);
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick image: $e')),
+          SnackBar(
+            content: Text(localeProvider.translateArgs(
+              'failed_pick_image',
+              {'error': '$e'},
+            )),
+          ),
         );
       }
     }
@@ -74,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   void _updateAvatar(String path) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     await authProvider.updateProfile(
       name: _nameController.text,
       phoneNumber: _phoneController.text,
@@ -83,7 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile picture updated successfully!')),
+        SnackBar(content: Text(localeProvider.translate('profile_pic_updated'))),
       );
     }
   }
@@ -95,6 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) {
+        final localeProvider = Provider.of<LocaleProvider>(context);
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -114,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Select Profile Picture',
+                  localeProvider.translate('select_profile_picture'),
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -126,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   children: [
                     _buildPickOption(
                       icon: Icons.photo_library,
-                      label: 'Gallery',
+                      label: localeProvider.translate('gallery'),
                       onTap: () {
                         Navigator.pop(context);
                         _pickImage(ImageSource.gallery);
@@ -134,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ),
                     _buildPickOption(
                       icon: Icons.camera_alt,
-                      label: 'Camera',
+                      label: localeProvider.translate('camera'),
                       onTap: () {
                         Navigator.pop(context);
                         _pickImage(ImageSource.camera);
@@ -144,7 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 ),
                 const SizedBox(height: 25),
                 Text(
-                  'Or Choose a Preset Avatar',
+                  localeProvider.translate('or_choose_avatar'),
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -240,10 +250,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           indicatorColor: Colors.orangeAccent,
           labelColor: Colors.orangeAccent,
           unselectedLabelColor: Colors.grey,
-          tabs: const [
-            Tab(icon: Icon(Icons.person), text: 'Info'),
-            Tab(icon: Icon(Icons.history), text: 'Orders'),
-            Tab(icon: Icon(Icons.card_giftcard), text: 'Coupons'),
+          tabs: [
+            Tab(icon: const Icon(Icons.person), text: localeProvider.translate('info')),
+            Tab(icon: const Icon(Icons.history), text: localeProvider.translate('orders')),
+            Tab(icon: const Icon(Icons.card_giftcard), text: localeProvider.translate('coupons')),
           ],
         ),
       ),
@@ -262,6 +272,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildInfoTab(User? user) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -276,11 +287,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             ),
           ),
           const SizedBox(height: 30),
-          _buildEditableField(Icons.person, 'Name', _nameController),
+          _buildEditableField(Icons.person, localeProvider.translate('name'), _nameController),
           const SizedBox(height: 15),
-          _buildEditableField(Icons.phone, 'Phone Number', _phoneController),
+          _buildEditableField(Icons.phone, localeProvider.translate('phone_number'), _phoneController),
           const SizedBox(height: 15),
-          _buildEditableField(Icons.location_on, 'Address', _addressController),
+          _buildEditableField(Icons.location_on, localeProvider.translate('address'), _addressController),
           const SizedBox(height: 30),
           SizedBox(
             width: double.infinity,
@@ -292,7 +303,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
               child: Text(
-                _isEditing ? 'Save Changes' : 'Edit Profile',
+                _isEditing
+                    ? localeProvider.translate('save_changes')
+                    : localeProvider.translate('edit_profile'),
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
@@ -319,15 +332,19 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildOrdersTab(AuthProvider auth) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final orders = auth.orderHistory;
     if (orders.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.history, size: 60, color: Colors.grey),
-            SizedBox(height: 10),
-            Text('No orders yet', style: TextStyle(color: Colors.grey)),
+            const Icon(Icons.history, size: 60, color: Colors.grey),
+            const SizedBox(height: 10),
+            Text(
+              localeProvider.translate('no_orders_yet'),
+              style: const TextStyle(color: Colors.grey),
+            ),
           ],
         ),
       );
@@ -340,7 +357,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
           child: ListTile(
-            title: Text('Order #${order.id.substring(0, 8).toUpperCase()}'),
+            title: Text(localeProvider.translateArgs(
+              'order_number',
+              {'id': order.id.substring(0, 8).toUpperCase()},
+            )),
             subtitle: Text(DateFormat('MMM dd, yyyy').format(order.date)),
             trailing: Text(
               '\$${order.totalAmount.toStringAsFixed(2)}',
@@ -359,11 +379,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Widget _buildCouponsTab() {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final List<Map<String, String>> coupons = [
-      {'code': 'MEMBER20', 'discount': '20% OFF', 'desc': 'Membership discount'},
-      {'code': 'PREMIUM40', 'discount': '40% OFF', 'desc': 'Premium member discount'},
-      {'code': 'FOODIE20', 'discount': '20% OFF', 'desc': 'Special promo'},
-      {'code': 'FREE_SHIP', 'discount': 'FREE DELIVERY', 'desc': 'Min spend \$20'},
+      {'code': 'MEMBER20', 'percent': '20', 'desc': 'membership_discount'},
+      {'code': 'PREMIUM40', 'percent': '40', 'desc': 'premium_member_discount'},
+      {'code': 'FOODIE20', 'percent': '20', 'desc': 'special_promo'},
+      {'code': 'FREE_SHIP', 'free': 'true', 'min': '20'},
     ];
 
     return ListView.builder(
@@ -371,12 +392,25 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       itemCount: coupons.length,
       itemBuilder: (context, index) {
         final coupon = coupons[index];
+        final isFree = coupon['free'] == 'true';
+        final label = isFree
+            ? localeProvider.translate('free_delivery')
+            : localeProvider.translateArgs(
+                'percent_off',
+                {'percent': coupon['percent']!},
+              );
+        final desc = isFree
+            ? localeProvider.translateArgs(
+                'min_spend',
+                {'amount': coupon['min']!},
+              )
+            : localeProvider.translate(coupon['desc']!);
         return Card(
           color: Colors.orange[50],
           child: ListTile(
             leading: const Icon(Icons.confirmation_number, color: Colors.orangeAccent),
-            title: Text(coupon['discount']!, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(coupon['desc']!),
+            title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(desc),
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(

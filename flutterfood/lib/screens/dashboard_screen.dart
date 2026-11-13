@@ -68,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             padding: const EdgeInsets.all(8),
             child: ProfileAvatar(
               profilePic: authProvider.user?.profilePic ?? '',
-              name: authProvider.user?.name ?? 'Guest',
+              name: authProvider.user?.name ?? localeProvider.translate('guest'),
               radius: 20,
               onTap: () => Scaffold.of(ctx).openDrawer(),
             ),
@@ -87,8 +87,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             ),
             Text(
               authProvider.user?.name != null
-                  ? 'Hi, ${authProvider.user!.name}'
-                  : 'Welcome!',
+                  ? localeProvider.translateArgs('greeting_hi', {
+                      'name': authProvider.user!.name,
+                    })
+                  : localeProvider.translate('welcome'),
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 color: Colors.white,
@@ -127,12 +129,12 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             const SizedBox(height: 16),
             _buildSearchBar(context, foodProvider, isDark),
             const SizedBox(height: 12),
-            _buildCategoryChips(foodProvider, isDark),
+            _buildCategoryChips(foodProvider, isDark, width: MediaQuery.of(context).size.width),
             const SizedBox(height: 8),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () => foodProvider.fetchFoods(),
-                child: _buildFoodGrid(foodProvider, cartProvider, isDark),
+                child: _buildFoodGrid(foodProvider, cartProvider, isDark, width: MediaQuery.of(context).size.width),
               ),
             ),
           ],
@@ -157,6 +159,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   }
 
   Widget _buildSearchBar(BuildContext context, FoodProvider foodProvider, bool isDark) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Container(
@@ -173,7 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         child: TextField(
           onChanged: (value) => foodProvider.setSearchQuery(value),
           decoration: InputDecoration(
-            hintText: 'Search your cravings...',
+            hintText: localeProvider.translate('search_cravings'),
             hintStyle: GoogleFonts.poppins(color: Colors.grey[400], fontSize: 13),
             prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
             border: OutlineInputBorder(
@@ -189,9 +192,13 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildCategoryChips(FoodProvider foodProvider, bool isDark) {
+  Widget _buildCategoryChips(FoodProvider foodProvider, bool isDark, {required double width}) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+    // Calculate optimal chip count based on width
+    final chipHeight = 36.0;
+
     return SizedBox(
-      height: 44,
+      height: chipHeight,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -202,7 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: ChoiceChip(
-              label: Text(category, style: GoogleFonts.poppins(fontSize: 13, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500)),
+              label: Text(localeProvider.translate(category), style: GoogleFonts.poppins(fontSize: 13, fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500)),
               selected: isSelected,
               onSelected: (_) => foodProvider.setCategory(category),
               selectedColor: Colors.orangeAccent,
@@ -219,7 +226,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildFoodGrid(FoodProvider foodProvider, CartProvider cartProvider, bool isDark) {
+  Widget _buildFoodGrid(FoodProvider foodProvider, CartProvider cartProvider, bool isDark, {required double width}) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final items = foodProvider.items;
     if (items.isEmpty) {
       return Center(
@@ -229,7 +237,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             Icon(Icons.search_off, size: 60, color: Colors.grey[300]),
             const SizedBox(height: 12),
             Text(
-              foodProvider.isLoading ? 'Loading...' : 'No items found',
+              foodProvider.isLoading
+                  ? localeProvider.translate('loading')
+                  : localeProvider.translate('no_items_found'),
               style: GoogleFonts.poppins(fontSize: 15, color: Colors.grey[400]),
             ),
           ],
@@ -237,13 +247,17 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       );
     }
 
+    // Calculate cross axis count based on available width
+    final crossAxisCount = width > 600 ? 4 : width > 400 ? 3 : 2;
+    final childAspectRatio = crossAxisCount == 4 ? 0.55 : crossAxisCount == 3 ? 0.73 : 0.68;
+
     return GridView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
-        childAspectRatio: 0.68,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: width > 600 ? 20 : width > 400 ? 14 : 14,
+        mainAxisSpacing: width > 600 ? 20 : 14,
+        childAspectRatio: childAspectRatio,
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
@@ -254,6 +268,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   }
 
   Widget _buildFoodCard(FoodItem item, FoodProvider foodProvider, CartProvider cartProvider, bool isDark) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
@@ -329,7 +345,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  localeProvider.translate(item.name),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600),
@@ -366,7 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                         padding: EdgeInsets.zero,
                       ),
                       child: Text(
-                        'Buy',
+                        localeProvider.translate('buy'),
                         style: GoogleFonts.poppins(
                           color: Colors.white,
                           fontSize: 12,
@@ -405,7 +421,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 ),
               ),
               accountName: Text(
-                authProvider.user?.name ?? 'Guest',
+                authProvider.user?.name ?? localeProvider.translate('guest'),
                 style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 17),
               ),
               accountEmail: Text(
@@ -414,7 +430,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               ),
               currentAccountPicture: ProfileAvatar(
                 profilePic: authProvider.user?.profilePic ?? '',
-                name: authProvider.user?.name ?? 'Guest',
+                name: authProvider.user?.name ?? localeProvider.translate('guest'),
                 radius: 36,
               ),
             ),
@@ -424,12 +440,12 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               Navigator.push(context, MaterialPageRoute(builder: (context) => const FavoritesScreen()));
             }),
             if (authProvider.isAdmin)
-              _drawerItem(Icons.admin_panel_settings, 'Admin Dashboard', () {
+              _drawerItem(Icons.admin_panel_settings, localeProvider.translate('admin_dashboard'), () {
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminDashboardScreen()));
               }),
             if (authProvider.isSeller)
-              _drawerItem(Icons.store, 'Seller Dashboard', () {
+              _drawerItem(Icons.store, localeProvider.translate('seller_dashboard'), () {
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const SellerDashboardScreen()));
               }),

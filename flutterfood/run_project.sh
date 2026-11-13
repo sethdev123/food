@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="/home/kabuto/project-food"
+BACKEND_DIR="$SCRIPT_DIR/../project-food"
 LARAVEL_PORT=8000
 LARAVEL_PID=""
 

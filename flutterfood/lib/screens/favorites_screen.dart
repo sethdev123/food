@@ -34,7 +34,7 @@ class FavoritesScreen extends StatelessWidget {
                   const Icon(Icons.favorite_border, size: 80, color: Colors.grey),
                   const SizedBox(height: 20),
                   Text(
-                    'No favorites yet',
+                    localeProvider.translate('no_favorites'),
                     style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey),
                   ),
                 ],
@@ -66,13 +66,13 @@ class FavoritesScreen extends StatelessWidget {
                       ),
                     ),
                     title: Text(
-                      item.name,
+                      localeProvider.translate(item.name),
                       style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.category, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text(localeProvider.translate(item.category), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                         const SizedBox(height: 4),
                         Text(
                           '\$${item.price.toStringAsFixed(2)}',

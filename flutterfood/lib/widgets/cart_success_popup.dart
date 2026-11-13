@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../providers/locale_provider.dart';
 
 void showCartSuccessPopup(BuildContext context) {
+  final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
   showDialog(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.3),
@@ -62,7 +65,7 @@ void showCartSuccessPopup(BuildContext context) {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Added to Cart!',
+                    localeProvider.translate('added_to_cart'),
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

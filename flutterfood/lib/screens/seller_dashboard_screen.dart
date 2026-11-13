@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../models/order_receipt.dart';
 import '../services/api_service.dart';
 
@@ -31,6 +32,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     });
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
 
     // Load from API
     List<dynamic> apiOrders = [];
@@ -46,7 +48,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // Read local orders
     final localOrders = auth.orderHistory;
     if (localOrders.isNotEmpty) {
-      final userName = auth.user?.name ?? 'You';
+      final userName = auth.user?.name ?? localeProvider.translate('customer_you');
       final userEmail = auth.user?.email ?? '';
 
       for (final r in localOrders) {
@@ -115,10 +117,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final localeProvider = Provider.of<LocaleProvider>(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Recent Orders',
+          localeProvider.translate('recent_orders'),
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.orangeAccent,
@@ -131,6 +134,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildBody() {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -143,19 +147,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             const SizedBox(height: 12),
             Text(_error!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _load, child: const Text('Retry')),
+            ElevatedButton(
+              onPressed: _load,
+              child: Text(localeProvider.translate('retry')),
+            ),
           ],
         ),
       );
     }
     if (_orders.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.receipt_long, size: 60, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('No orders yet', style: TextStyle(color: Colors.grey, fontSize: 16)),
+            const Icon(Icons.receipt_long, size: 60, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(
+              localeProvider.translate('no_orders_yet'),
+              style: const TextStyle(color: Colors.grey, fontSize: 16),
+            ),
           ],
         ),
       );
@@ -169,7 +179,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Orders containing your food items',
+              localeProvider.translate('orders_containing'),
               style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[600]),
             ),
             const SizedBox(height: 12),
@@ -183,14 +193,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   color: Colors.orange[800],
                 ),
                 columnSpacing: 20,
-                columns: const [
-                  DataColumn(label: Text('#')),
-                  DataColumn(label: Text('Customer')),
-                  DataColumn(label: Text('Items Ordered')),
-                  DataColumn(label: Text('Total')),
-                  DataColumn(label: Text('Payment')),
-                  DataColumn(label: Text('Status')),
-                  DataColumn(label: Text('Date')),
+                columns: [
+                  const DataColumn(label: Text('#')),
+                  DataColumn(label: Text(localeProvider.translate('col_customer'))),
+                  DataColumn(label: Text(localeProvider.translate('col_items'))),
+                  DataColumn(label: Text(localeProvider.translate('col_total'))),
+                  DataColumn(label: Text(localeProvider.translate('col_payment'))),
+                  DataColumn(label: Text(localeProvider.translate('col_status'))),
+                  DataColumn(label: Text(localeProvider.translate('col_date'))),
                 ],
                 rows: _orders.map((order) {
                   final items = order['items'] as List<dynamic>? ?? [];
@@ -201,7 +211,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   final totalPrice = (order['total_price'] as num?)?.toDouble() ?? 0;
                   final payment = order['payment_method'] as String? ?? '';
 
-                  final itemsStr = items.map((i) => '${i['name']} \u00d7${i['quantity']}').join(', ');
+                  final itemsStr = items
+                      .map((i) =>
+                          '${localeProvider.translate(i['name'] as String? ?? '')} \u00d7${i['quantity']}')
+                      .join(', ');
 
                   return DataRow(
                     cells: [
@@ -223,7 +236,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                         ),
                       ),
                       DataCell(Text('\$${totalPrice.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13))),
-                      DataCell(Text(payment, style: GoogleFonts.poppins(fontSize: 12))),
+                      DataCell(Text(localeProvider.translate(payment), style: GoogleFonts.poppins(fontSize: 12))),
                       DataCell(_buildStatusBadge(status)),
                       DataCell(Text(_formatDate(createdAt), style: GoogleFonts.poppins(fontSize: 12))),
                     ],
@@ -238,6 +251,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   Widget _buildStatusBadge(String status) {
+    final localeProvider = Provider.of<LocaleProvider>(context, listen: false);
     final isAccepted = status == 'pending' || status == 'completed';
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -245,7 +259,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         Icon(Icons.circle, size: 10, color: isAccepted ? Colors.green : Colors.red),
         const SizedBox(width: 4),
         Text(
-          isAccepted ? 'Accepted' : 'Cancelled',
+          isAccepted
+              ? localeProvider.translate('status_accepted')
+              : localeProvider.translate('status_cancelled'),
           style: GoogleFonts.poppins(fontSize: 12, color: isAccepted ? Colors.green : Colors.red),
         ),
       ],
